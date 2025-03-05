@@ -1,357 +1,101 @@
-![libuv][libuv_banner]
+# LibUV Custom Build for Node.js
 
-## Overview
+This guide provides detailed instructions on building a custom version of LibUV for Node.js on Windows 11.
 
-libuv is a multi-platform support library with a focus on asynchronous I/O. It
-was primarily developed for use by [Node.js][], but it's also
-used by [Luvit](http://luvit.io/), [Julia](http://julialang.org/),
-[uvloop](https://github.com/MagicStack/uvloop), and [others](https://github.com/libuv/libuv/blob/v1.x/LINKS.md).
+## Testing Environment
 
-## Feature highlights
+- **OS**: Windows 11 Home
+- **Processor**: 12th Gen Intel(R) Core(TM) i7-12000H
+- **RAM**: 16GB
+- **Storage**: NVMe WD_BLACK SN7100 1TB SSD
+- **GPU**: NVIDIA GeForce 3050 Ti Laptop GPU with 4GB VRAM
 
- * Full-featured event loop backed by epoll, kqueue, IOCP, event ports.
+## Prerequisites
 
- * Asynchronous TCP and UDP sockets
+### Step 0: Install Visual Studio Code & Windows SDK
+1. Download and install the latest version of Visual Studio Code from [code.visualstudio.com/download](https://code.visualstudio.com/download)
+2. Download and install Windows SDK v10.0.231000.2454 from [developer.microsoft.com/windows/downloads/windows-sdk](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/)
 
- * Asynchronous DNS resolution
+### Step 1: Install Chrome
+1. Download Chrome Setup v134.0.6947.0 from [google.com/chrome](https://www.google.com/chrome/dr/download/?brand=CHBD&ds_kid=43700075934933066&gad_source=1&gclid=Cj0KCQiAwOe8BhCCARIsAGKeD54MqdtvsN3LpEYaROVSCoMk0WDSPgf6RRV1NEf9Gvy-ZiFxnE-oSj4aAqnQEALw_wcB&gclsrc=aw.ds)
+2. Complete the installation process
 
- * Asynchronous file and file system operations
+### Step 2: Install Node.js
+1. Download Node.js v22.12.1 (LTS) from [nodejs.org/en/download](https://nodejs.org/en/download)
+2. Install node-v22.13.1-x64.msi to `C:\Program Files\nodejs`
 
- * File system events
+### Step 3: Download LibUV
+1. Go to the LibUV repository: [github.com/libuv/libuv/tree/v1.x](https://github.com/libuv/libuv/tree/v1.x) (Dated 1/29/2025)
+2. Download the libuv-1.x.zip into a folder and extract the files
+3. Open the libuv-1.x folder in Visual Studio Code
 
- * ANSI escape code controlled TTY
+### Step 4: Install CMake
+1. Download cmake-3.31.5-windows-x86_64.msi from [cmake.org/download](https://cmake.org/download/)
+2. Install CMake to `C:\Program Files\CMake`
 
- * IPC with socket sharing, using Unix domain sockets or named pipes (Windows)
-
- * Child processes
-
- * Thread pool
-
- * Signal handling
-
- * High resolution clock
-
- * Threading and synchronization primitives
-
-## Versioning
-
-Starting with version 1.0.0 libuv follows the [semantic versioning](http://semver.org/)
-scheme. The API change and backwards compatibility rules are those indicated by
-SemVer. libuv will keep a stable ABI across major releases.
-
-The ABI/API changes can be tracked [here](http://abi-laboratory.pro/tracker/timeline/libuv/).
-
-## Licensing
-
-libuv is licensed under the MIT license. Check the [LICENSE](LICENSE) and
-[LICENSE-extra](LICENSE-extra) files.
-
-The documentation is licensed under the CC BY 4.0 license. Check the
-[LICENSE-docs file](LICENSE-docs).
-
-## Community
-
- * [Support](https://github.com/libuv/libuv/discussions)
- * [Mailing list](http://groups.google.com/group/libuv)
-
-## Documentation
-
-### Official documentation
-
-Located in the docs/ subdirectory. It uses the [Sphinx](http://sphinx-doc.org/)
-framework, which makes it possible to build the documentation in multiple
-formats.
-
-Show different supported building options:
-
-```bash
-$ make help
-```
-
-Build documentation as HTML:
-
-```bash
-$ make html
-```
-
-Build documentation as HTML and live reload it when it changes (this requires
-sphinx-autobuild to be installed and is only supported on Unix):
-
-```bash
-$ make livehtml
-```
-
-Build documentation as man pages:
-
-```bash
-$ make man
-```
-
-Build documentation as ePub:
-
-```bash
-$ make epub
-```
-
-NOTE: Windows users need to use make.bat instead of plain 'make'.
-
-Documentation can be browsed online [here](http://docs.libuv.org).
-
-The [tests and benchmarks](https://github.com/libuv/libuv/tree/master/test)
-also serve as API specification and usage examples.
-
-### Other resources
-
- * [LXJS 2012 talk](http://www.youtube.com/watch?v=nGn60vDSxQ4)
-   &mdash; High-level introductory talk about libuv.
- * [libuv-dox](https://github.com/thlorenz/libuv-dox)
-   &mdash; Documenting types and methods of libuv, mostly by reading uv.h.
- * [learnuv](https://github.com/thlorenz/learnuv)
-   &mdash; Learn uv for fun and profit, a self guided workshop to libuv.
-
-These resources are not handled by libuv maintainers and might be out of
-date. Please verify it before opening new issues.
-
-## Downloading
-
-libuv can be downloaded either from the
-[GitHub repository](https://github.com/libuv/libuv)
-or from the [downloads site](http://dist.libuv.org/dist/).
-
-Before verifying the git tags or signature files, importing the relevant keys
-is necessary. Key IDs are listed in the
-[MAINTAINERS](https://github.com/libuv/libuv/blob/master/MAINTAINERS.md)
-file, but are also available as git blob objects for easier use.
-
-Importing a key the usual way:
-
-```bash
-$ gpg --keyserver pool.sks-keyservers.net --recv-keys AE9BC059
-```
-
-Importing a key from a git blob object:
-
-```bash
-$ git show pubkey-saghul | gpg --import
-```
-
-### Verifying releases
-
-Git tags are signed with the developer's key, they can be verified as follows:
-
-```bash
-$ git verify-tag v1.6.1
-```
-
-Starting with libuv 1.7.0, the tarballs stored in the
-[downloads site](http://dist.libuv.org/dist/) are signed and an accompanying
-signature file sit alongside each. Once both the release tarball and the
-signature file are downloaded, the file can be verified as follows:
-
-```bash
-$ gpg --verify libuv-1.7.0.tar.gz.sign
-```
+### Step 5: Restart Computer
+Restart your computer once you've completed Steps 1-4.
 
 ## Build Instructions
 
-For UNIX-like platforms, including macOS, there are two build methods:
-autotools or [CMake][].
+### Step 6: Build and Install LibUV
 
-For Windows, [CMake][] is the only supported build method and has the
-following prerequisites:
-
-<details>
-
-* One of:
-  * [Visual C++ Build Tools][]
-  * [Visual Studio 2015 Update 3][], all editions
-    including the Community edition (remember to select
-    "Common Tools for Visual C++ 2015" feature during installation).
-  * [Visual Studio 2017][], any edition (including the Build Tools SKU).
-    **Required Components:** "MSbuild", "VC++ 2017 v141 toolset" and one of the
-    Windows SDKs (10 or 8.1).
-* Basic Unix tools required for some tests,
-  [Git for Windows][] includes Git Bash
-  and tools which can be included in the global `PATH`.
-
-</details>
-
-To build with autotools:
-
+#### Generate Build Files
 ```bash
-$ sh autogen.sh
-$ ./configure
-$ make
-$ make check
-$ make install
+mkdir build
+cd build
+cmake ..
 ```
 
-To build with [CMake][]:
-
+#### Build the Project
 ```bash
-$ mkdir -p build
-
-$ (cd build && cmake .. -DBUILD_TESTING=ON) # generate project with tests
-$ cmake --build build                       # add `-j <n>` with cmake >= 3.12
-
-# Run tests:
-$ (cd build && ctest -C Debug --output-on-failure)
-
-# Or manually run tests:
-$ build/uv_run_tests                        # shared library build
-$ build/uv_run_tests_a                      # static library build
+cmake --build . --config Release
 ```
 
-To cross-compile with [CMake][] (unsupported but generally works):
-
+#### Install the Library
 ```bash
-$ cmake ../..                 \
-  -DCMAKE_SYSTEM_NAME=Windows \
-  -DCMAKE_SYSTEM_VERSION=6.1  \
-  -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc
+cmake --install . --config Release
 ```
+This will install libuv-custom to `C:\usr\local\libuv-custom`
 
-### Install with Homebrew
+### Step 7: Setup Environment Variables
+1. Go to Environment Variables > System Variables
+2. Add `C:\usr\local\libuv-custom\bin` to the Path variable
+3. Click OK on all windows to save changes
 
+#### Compile Test Program
 ```bash
-$ brew install --HEAD libuv
+cl test.c /I"C:\usr\local\libuv-custom\include" /link "C:\usr\local\libuv-custom\lib\uv.lib"
 ```
 
-Note to OS X users:
+## Integration with Node.js
 
-Make sure that you specify the architecture you wish to build for in the
-"ARCHS" flag. You can specify more than one by delimiting with a space
-(e.g. "x86_64 i386").
+### Step 8: Using the libuv-custom Library in Node.js
 
-### Install with vcpkg
-
+#### Backup Existing Node.js Library
 ```bash
-$ git clone https://github.com/microsoft/vcpkg.git
-$ ./bootstrap-vcpkg.bat # for powershell
-$ ./bootstrap-vcpkg.sh # for bash
-$ ./vcpkg install libuv
+mkdir C:\NodeJS_Backup
+xcopy "C:\Program Files\nodejs\*.*" "C:\NodeJS_Backup\" /E /H /C /I
 ```
 
-### Install with Conan
-
-You can install pre-built binaries for libuv or build it from source using [Conan](https://conan.io/). Use the following command:
-
+#### Check Current Versions
 ```bash
-conan install --requires="libuv/[*]" --build=missing
+node -v
+node -p "process.versions.uv"
 ```
 
-The libuv Conan recipe is kept up to date by Conan maintainers and community contributors.
-If the version is out of date, please [create an issue or pull request](https://github.com/conan-io/conan-center-index) on the ConanCenterIndex repository.
-
-
-### Running tests
-
-Some tests are timing sensitive. Relaxing test timeouts may be necessary
-on slow or overloaded machines:
-
+#### Replace LibUV Files
 ```bash
-$ env UV_TEST_TIMEOUT_MULTIPLIER=2 build/uv_run_tests # 10s instead of 5s
+copy "C:\usr\local\libuv-custom\bin\uv.dll" "C:\Program Files\nodejs\" /Y
 ```
 
-#### Run one test
-
-The list of all tests is in `test/test-list.h`.
-
-This invocation will cause the test driver to fork and execute `TEST_NAME` in
-a child process:
-
+#### Revert to Original Version (if needed)
 ```bash
-$ build/uv_run_tests_a TEST_NAME
+xcopy "C:\NodeJS_Backup\*.*" "C:\Program Files\nodejs\" /E /H /C /I /Y
 ```
 
-This invocation will cause the test driver to execute the test in
-the same process:
-
-```bash
-$ build/uv_run_tests_a TEST_NAME TEST_NAME
-```
-
-#### Debugging tools
-
-When running the test from within the test driver process
-(`build/uv_run_tests_a TEST_NAME TEST_NAME`), tools like gdb and valgrind
-work normally.
-
-When running the test from a child of the test driver process
-(`build/uv_run_tests_a TEST_NAME`), use these tools in a fork-aware manner.
-
-##### Fork-aware gdb
-
-Use the [follow-fork-mode](https://sourceware.org/gdb/onlinedocs/gdb/Forks.html) setting:
-
-```
-$ gdb --args build/uv_run_tests_a TEST_NAME
-
-(gdb) set follow-fork-mode child
-...
-```
-
-##### Fork-aware valgrind
-
-Use the `--trace-children=yes` parameter:
-
-```bash
-$ valgrind --trace-children=yes -v --tool=memcheck --leak-check=full --track-origins=yes --leak-resolution=high --show-reachable=yes --log-file=memcheck-%p.log build/uv_run_tests_a TEST_NAME
-```
-
-### Running benchmarks
-
-See the section on running tests.
-The benchmark driver is `./uv_run_benchmarks_a` and the benchmarks are
-listed in `test/benchmark-list.h`.
-
-## Supported Platforms
-
-Check the [SUPPORTED_PLATFORMS file](SUPPORTED_PLATFORMS.md).
-
-### `-fno-strict-aliasing`
-
-It is recommended to turn on the `-fno-strict-aliasing` compiler flag in
-projects that use libuv. The use of ad hoc "inheritance" in the libuv API
-may not be safe in the presence of compiler optimizations that depend on
-strict aliasing.
-
-MSVC does not have an equivalent flag but it also does not appear to need it
-at the time of writing (December 2019.)
-
-### AIX Notes
-
-AIX compilation using IBM XL C/C++ requires version 12.1 or greater.
-
-AIX support for filesystem events requires the non-default IBM `bos.ahafs`
-package to be installed.  This package provides the AIX Event Infrastructure
-that is detected by `autoconf`.
-[IBM documentation](http://www.ibm.com/developerworks/aix/library/au-aix_event_infrastructure/)
-describes the package in more detail.
-
-### z/OS Notes
-
-z/OS compilation requires [ZOSLIB](https://github.com/ibmruntimes/zoslib) to be installed. When building with [CMake][], use the flag `-DZOSLIB_DIR` to specify the path to [ZOSLIB](https://github.com/ibmruntimes/zoslib):
-
-```bash
-$ (cd build && cmake .. -DBUILD_TESTING=ON -DZOSLIB_DIR=/path/to/zoslib)
-$ cmake --build build
-```
-
-z/OS creates System V semaphores and message queues. These persist on the system
-after the process terminates unless the event loop is closed.
-
-Use the `ipcrm` command to manually clear up System V resources.
-
-## Patches
-
-See the [guidelines for contributing][].
-
-[CMake]: https://cmake.org/
-[node.js]: http://nodejs.org/
-[guidelines for contributing]: https://github.com/libuv/libuv/blob/master/CONTRIBUTING.md
-[libuv_banner]: https://raw.githubusercontent.com/libuv/libuv/master/img/banner.png
-[Visual C++ Build Tools]: https://visualstudio.microsoft.com/visual-cpp-build-tools/
-[Visual Studio 2015 Update 3]: https://www.visualstudio.com/vs/older-downloads/
-[Visual Studio 2017]: https://www.visualstudio.com/downloads/
-[Git for Windows]: http://git-scm.com/download/win
+## Notes
+- This guide specifically targets Windows 11 with the specified hardware configuration
+- Always create a backup before replacing system files
+- The LibUV version used is from the v1.x branch dated 1/29/2025
+- The compilation process may take a while due to the complexity of the project
