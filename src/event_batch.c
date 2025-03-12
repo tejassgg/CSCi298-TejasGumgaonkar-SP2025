@@ -34,6 +34,7 @@ static void uv__batch_timeout_cb(uv_timer_t *handle)
   }
 }
 
+
 int uv_batch_init_ex(uv_loop_t *loop, const uv_batch_config_t *config)
 {
   int err;
@@ -47,23 +48,20 @@ int uv_batch_init_ex(uv_loop_t *loop, const uv_batch_config_t *config)
     return UV_EALREADY;
 
   /* Allocate batch system structure */
-  batch_system = (uv_batch_t *)uv__malloc(sizeof(uv_batch_t));
-  if (batch_system == NULL)
+  batch_system->iocp_events = (uv_batch_iocp_event_t *)
+      uv__malloc(sizeof(uv_batch_iocp_event_t) * config->batch_size);
+
+  if (batch_system->iocp_events == NULL)
+  {
+    uv__free(batch_system);
     return UV_ENOMEM;
+  }
 
   /* Initialize batch system fields */
   batch_system->size = 0;
   batch_system->capacity = config->batch_size;
   batch_system->timeout_ms = config->timeout_ms;
   batch_system->flags = config->flags;
-  batch_system->loop = loop;
-  batch_system->queue_head = NULL;
-  batch_system->queue_tail = NULL;
-  batch_system->current_size = 0;
-  batch_system->is_processing = 0;
-  batch_system->initialized = 1;
-  batch_system->event_handle = NULL;
-  memset(&batch_system->stats, 0, sizeof(batch_system->stats));
 
   /* Allocate event array */
   batch_system->iocp_events = (uv_batch_iocp_event_t *)
@@ -75,60 +73,17 @@ int uv_batch_init_ex(uv_loop_t *loop, const uv_batch_config_t *config)
     return UV_ENOMEM;
   }
 
-  /* Allocate event storage array */
-  batch_system->events = (uv_batch_event_t *)
-      uv__malloc(sizeof(uv_batch_event_t) * config->batch_size);
-
-  if (batch_system->events == NULL)
-  {
-    uv__free(batch_system->iocp_events);
-    uv__free(batch_system);
-    return UV_ENOMEM;
-  }
-
-  /* Set event size */
-  batch_system->event_size = UV_BATCH_MAX_EVENT_SIZE;
-
-  /* Initialize mutex */
-  err = uv_mutex_init(&batch_system->mutex);
-  if (err)
-  {
-    uv__free(batch_system->events);
-    uv__free(batch_system->iocp_events);
-    uv__free(batch_system);
-    return err;
-  }
-
   /* Initialize timeout timer */
   err = uv_timer_init(loop, &batch_system->timeout_timer);
   if (err)
   {
-    uv_mutex_destroy(&batch_system->mutex);
-    uv__free(batch_system->events);
     uv__free(batch_system->iocp_events);
     uv__free(batch_system);
     return err;
   }
-
-  /* Set timer data pointer */
-  batch_system->timeout_timer.data = batch_system;
-
-/* Initialize Windows-specific resources */
-#ifdef _WIN32
-  err = uv__batch_windows_init(loop, batch_system);
-  if (err)
-  {
-    uv_close((uv_handle_t *)&batch_system->timeout_timer, NULL);
-    uv_mutex_destroy(&batch_system->mutex);
-    uv__free(batch_system->events);
-    uv__free(batch_system->iocp_events);
-    uv__free(batch_system);
-    return err;
-  }
-#endif
 
   /* Set timer as internal handle so it doesn't prevent loop from exiting */
-  batch_system->timeout_timer.flags |= UV_HANDLE_INTERNAL;
+  batch_system->timeout_timer.flags |= UV_HANDLE_INTERVAL;
 
   /* Store batch system in the loop */
   loop->batch_system = batch_system;
@@ -265,27 +220,26 @@ int uv__batch_add_iocp_event(uv_loop_t *loop, DWORD bytes, ULONG_PTR key, OVERLA
 //   return timeout;
 // }
 
-uint64_t uv__batch_adjust_timeout(uv_loop_t *loop, uint64_t timeout)
-{
-  uv_batch_t *batch_system;
-
+uint64_t uv__batch_adjust_timeout(uv_loop_t *loop, uint64_t timeout) {
+  uv_batch_t* batch_system;
+  
   /* If batching isn't enabled or there are no pending events, don't modify timeout */
   if (loop == NULL || loop->batch_system == NULL || !loop->batch_enabled || loop->batch_pending == 0)
-    return timeout;
-
-  batch_system = (uv_batch_t *)loop->batch_system;
-
-  /*
+      return timeout;
+  
+  batch_system = (uv_batch_t*)loop->batch_system;
+  
+  /* 
    * If the current timeout is longer than our batch timeout, reduce it
    * to ensure batched events get processed reasonably soon.
-   *
+   * 
    * This is important because we don't want events sitting in the batch
    * for too long just because the event loop is waiting for a longer timeout.
    */
   if (timeout > batch_system->timeout_ms || timeout == INFINITE)
-    return batch_system->timeout_ms;
-
-  /*
+      return batch_system->timeout_ms;
+  
+  /* 
    * If the current timeout is already shorter than our batch timeout,
    * we keep the shorter value to maintain responsiveness.
    */
@@ -346,35 +300,29 @@ void uv__batch_process(uv_batch_t *batch)
 }
 
 /* Signal batch processing on Windows */
-void uv__batch_windows_signal(uv_batch_t *batch)
-{
-  if (batch && batch->event_handle)
-  {
+void uv__batch_windows_signal(uv_batch_t* batch) {
+  if (batch && batch->event_handle) {
     SetEvent(batch->event_handle);
   }
 }
 
-void uv__batch_schedule_processing(uv_loop_t *loop, int immediate)
-{
+void uv__batch_schedule_processing(uv_loop_t *loop, int immediate) {
   uv_batch_t *batch_system;
 
   if (loop == NULL || loop->batch_system == NULL)
-    return;
+      return;
 
   batch_system = (uv_batch_t *)loop->batch_system;
 
-  if (immediate)
-  {
-    uv__batch_process_pending(loop);
-  }
-  else
-  {
-    // Schedule processing for the next iteration of the event loop
-    uv_timer_start(&batch_system->timeout_timer, uv__batch_timeout_cb, batch_system->timeout_ms, 0);
+  if (immediate) {
+      uv__batch_process_pending(loop);
+  } else {
+      // Schedule processing for the next iteration of the event loop
+      uv_timer_start(&batch_system->timeout_timer, uv__batch_timeout_cb, batch_system->timeout_ms, 0);
   }
 }
 
-/*
+/* 
  * Adds an event to the batch system's internal storage.
  * This is the core internal function that handles the actual event storage
  * and is called by platform-specific event addition functions.
@@ -388,84 +336,72 @@ void uv__batch_schedule_processing(uv_loop_t *loop, int immediate)
  *   0 on success (event added to batch)
  *   -1 on failure (batch full, batching disabled, etc.)
  */
-int uv__batch_add_event_internal(uv_loop_t *loop, void *event, size_t event_size)
-{
-  uv_batch_t *batch_system;
-  char *storage_ptr;
-  uv_batch_event_t *batch_event;
-
+int uv__batch_add_event_internal(uv_loop_t* loop, void* event, size_t event_size) {
+  uv_batch_t* batch_system;
+  char* storage_ptr;
+  uv_batch_event_t* batch_event;
+  
   /* Validate parameters and check if batching is enabled */
-  if (loop == NULL || loop->batch_system == NULL ||
-      !loop->batch_enabled || event == NULL || event_size == 0)
-  {
+  if (loop == NULL || loop->batch_system == NULL || 
+      !loop->batch_enabled || event == NULL || event_size == 0) {
     return -1;
   }
-
-  batch_system = (uv_batch_t *)loop->batch_system;
-
+  
+  batch_system = (uv_batch_t*)loop->batch_system;
+  
   /* Check if batch is at capacity */
-  if (loop->batch_pending >= batch_system->capacity)
-  {
+  if (loop->batch_pending >= batch_system->capacity) {
     /* If auto-process is enabled, process the current batch first */
-    if (batch_system->flags & UV_BATCH_AUTO_PROCESS)
-    {
+    if (batch_system->flags & UV_BATCH_AUTO_PROCESS) {
       uv__batch_process_pending(loop);
-    }
-    else
-    {
+    } else {
       /* Batch is full and auto-process is disabled */
       return -1;
     }
   }
-
+  
   /* Get pointer to the next available event storage slot */
   batch_event = &batch_system->events[loop->batch_pending];
-
+  
   /* Check if the event will fit in our storage */
-  if (event_size > batch_system->event_size)
-  {
+  if (event_size > batch_system->event_size) {
     /* Event is too large for pre-allocated storage */
     return -1;
   }
-
+  
   /* Copy the event data into our storage */
   memcpy(&batch_event->data, event, event_size);
   batch_event->size = event_size;
-
+  
   /* Mark the event as valid */
   batch_event->flags = UV_BATCH_EVENT_VALID;
-
+  
   /* Increment pending event count */
   loop->batch_pending++;
-
+  
   /* If this is the first event in the batch, start the timeout timer */
-  if (loop->batch_pending == 1 && batch_system->timeout_ms > 0)
-  {
-    uv_timer_start(&batch_system->timeout_timer,
-                   uv__batch_timeout_cb,
-                   batch_system->timeout_ms,
+  if (loop->batch_pending == 1 && batch_system->timeout_ms > 0) {
+    uv_timer_start(&batch_system->timeout_timer, 
+                   uv__batch_timeout_cb, 
+                   batch_system->timeout_ms, 
                    0);
   }
-
+  
   /* If we've reached capacity or threshold, schedule processing */
   if (loop->batch_pending >= batch_system->capacity ||
-      (batch_system->flags & UV_BATCH_THRESHOLD_PROCESS &&
-       loop->batch_pending >= batch_system->process_threshold))
-  {
-
+      (batch_system->flags & UV_BATCH_THRESHOLD_PROCESS && 
+       loop->batch_pending >= batch_system->process_threshold)) {
+    
     /* Signal the event loop that processing is needed */
-    if (loop->batch_pending >= batch_system->capacity)
-    {
+    if (loop->batch_pending >= batch_system->capacity) {
       /* For full batches, we might want immediate processing */
       uv__batch_schedule_processing(loop, 1); /* 1 = immediate */
-    }
-    else
-    {
+    } else {
       /* For threshold-based triggers, regular scheduling is fine */
       uv__batch_schedule_processing(loop, 0); /* 0 = regular */
     }
   }
-
+  
   return 0;
 }
 
