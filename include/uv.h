@@ -2062,14 +2062,12 @@ extern "C"
                                   size_t utf16_len);
 
   /* Event batching API functions */
-  UV_EXTERN int uv_batch_init(uv_loop_t *loop,
-                              uv_batch_t **batch,
-                              void (*process_cb)(uv_batch_event_t *, size_t),
-                              void (*error_cb)(uv_batch_event_t *, int));
+  // UV_EXTERN int uv_batch_init(uv_loop_t *loop,
+  //                             uv_batch_t **batch,
+  //                             void (*process_cb)(uv_batch_event_t *, size_t),
+  //                             void (*error_cb)(uv_batch_event_t *, int));
 
-  // UV_EXTERN int uv_batch_enable(uv_loop_t* loop);
-
-  // UV_EXTERN int uv_batch_disable(uv_loop_t* loop);
+  UV_EXTERN int uv_batch_init(uv_loop_t *loop);
 
   UV_EXTERN int uv_batch_set_timeout(uv_loop_t *loop, uint64_t timeout_ms);
 
