@@ -86,8 +86,10 @@ static int uv__loops_capacity;
 #define UV__LOOPS_CHUNK_SIZE 8
 static uv_mutex_t uv__loops_lock;
 
-static void uv__loops_init(void)
-{
+static void uv__loops_init(void) {
+  uv__loops = NULL;
+  uv__loops_size = 0;
+  uv__loops_capacity = 0;
   uv_mutex_init(&uv__loops_lock);
 }
 
@@ -397,9 +399,7 @@ void uv__loop_close(uv_loop_t *loop)
   uv__free(lfields);
   loop->internal_fields = NULL;
 
-  // Changes for Event Loop Code
-  if (loop->batch_system != NULL)
-  {
+  if (loop->batch_system != NULL) {
     uv_batch_cleanup(loop);
   }
 

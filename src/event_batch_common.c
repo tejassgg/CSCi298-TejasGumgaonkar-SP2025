@@ -10,7 +10,7 @@
  /* Get high-resolution timestamp */
  uint64_t uv__batch_hrtime(void) {
      return uv_hrtime() / 1000000; /* Convert from nanoseconds to milliseconds */
- }
+ } 
  
  /* Update batch statistics */
  void uv__batch_update_stats(uv_batch_t* batch, size_t processed_count) {

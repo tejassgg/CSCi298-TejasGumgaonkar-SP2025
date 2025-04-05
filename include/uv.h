@@ -1522,7 +1522,7 @@ extern "C"
                             unsigned int nbufs,
                             int64_t offset,
                             uv_fs_cb cb);
-/*
+/* 
  * This flag can be used with uv_fs_copyfile() to return an error if the
  * destination already exists.
  */

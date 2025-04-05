@@ -19,10 +19,7 @@ int uv__batch_windows_init(uv_loop_t *loop, uv_batch_t *batch)
   }
 
   /* Register with IOCP */
-  if (CreateIoCompletionPort((HANDLE)hEvent,
-                             loop->iocp,
-                             (ULONG_PTR)batch,
-                             0) == NULL)
+  if (CreateIoCompletionPort((HANDLE)hEvent, loop->iocp, (ULONG_PTR)batch, 0) == NULL)
   {
     CloseHandle(hEvent);
     return UV_EINVAL;
@@ -39,6 +36,12 @@ void uv__batch_windows_cleanup(uv_batch_t *batch)
   {
     CloseHandle(batch->event_handle);
     batch->event_handle = NULL;
+  }
+
+  if (batch && batch->iocp_events)
+  {
+    uv__free(batch->iocp_events);
+    batch->iocp_events = NULL;
   }
 }
 
@@ -69,17 +72,16 @@ int uv__batch_add_iocp_event(uv_loop_t *loop, DWORD bytes, ULONG_PTR key, OVERLA
     }
   }
 
-  // Get existing IOCP events array or allocate if needed
-  if (batch_system->iocp_events == NULL)
-  {
-    batch_system->iocp_events = (uv_batch_iocp_event_t *)
-        uv__malloc(sizeof(uv_batch_iocp_event_t) * batch_system->capacity);
+  // Validate batch capacity and allocate IOCP events array
+  if (batch_system->capacity == 0 || batch_system->capacity > UV_BATCH_MAX_SIZE) {
+    uv_mutex_unlock(&batch_system->mutex);
+    return -1;
+  }
 
-    if (batch_system->iocp_events == NULL)
-    {
-      uv_mutex_unlock(&batch_system->mutex);
-      return -1;
-    }
+  batch_system->iocp_events = (uv_batch_iocp_event_t *)uv__malloc(sizeof(uv_batch_iocp_event_t) * batch_system->capacity);
+  if (batch_system->iocp_events == NULL) {
+    uv_mutex_unlock(&batch_system->mutex);
+    return -1;
   }
 
   // Add event to batch
@@ -94,15 +96,15 @@ int uv__batch_add_iocp_event(uv_loop_t *loop, DWORD bytes, ULONG_PTR key, OVERLA
   // Start timer if this is the first event
   if (loop->batch_pending == 1)
   {
-    uv_timer_start(&batch_system->timeout_timer,
-                   uv__batch_timer_cb,
-                   batch_system->timeout_ms,
-                   0);
+    if (uv_timer_start(&batch_system->timeout_timer, uv__batch_timer_cb, batch_system->timeout_ms, 0) != 0) {
+      uv_mutex_unlock(&batch_system->mutex);
+      return -1;
+    }
   }
 
   uv_mutex_unlock(&batch_system->mutex);
   return 0;
-}
+} 
 
 /* Platform-specific process pending check */
 int uv__batch_windows_process_pending(uv_loop_t *loop)
@@ -120,13 +122,9 @@ int uv__batch_windows_process_pending(uv_loop_t *loop)
   batch = loop->batch_system;
 
   /* Check if batch event is signaled */
-  result = WaitForSingleObject(batch->event_handle, 0);
-  if (result == WAIT_OBJECT_0)
-  {
-    /* Reset event */
+  result = WaitForSingleObject(batch->event_handle, 100); // 100 ms timeout
+  if (result == WAIT_OBJECT_0) {
     ResetEvent(batch->event_handle);
-
-    /* Process batch */
     uv__batch_process(batch);
     return 1;
   }

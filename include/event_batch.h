@@ -5,7 +5,7 @@
 #include "uv.h"
 #include "../src/win/internal.h"
 
-#ifdef __cplusplus
+#ifdef __cplusplus 
 extern "C" {
 #endif
 
